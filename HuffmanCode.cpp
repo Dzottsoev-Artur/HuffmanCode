@@ -50,7 +50,7 @@ public:
     void buildTreeEn(ifstream& f);
     void buildTreeDec(ifstream& fg);
     void BuildCode(HuffmanNode* r);
-    double encode(ifstream& f, ofstream& g);
+    void encode(ifstream& f, ofstream& g);
     bool decode(ifstream& fg,ofstream& gf);
     struct Sort 
     {
@@ -159,8 +159,9 @@ void Huffman::buildTreeDec(ifstream& f)
     root_node = nodes.front();
 }
 
-double Huffman::encode(ifstream& f, ofstream& g) 
+void Huffman::encode(ifstream& f, ofstream& g) 
 {
+ 
     buildTreeEn(f);
     BuildCode(root_node);
     int count = 0;
@@ -176,20 +177,21 @@ double Huffman::encode(ifstream& f, ofstream& g)
             g.write((char*)(&symbol_frequency[char(i)]), sizeof(symbol_frequency[char(i)]));
         }
     }
+
     f.clear();
     f.seekg(0);
     count = 0;
 
     char temp = 0;
+    list<bool> code_list; 
     while (!f.eof()) {
         char c = f.get();
-        vector<bool> x = symbol_codewords[c];
-        for (int j = 0; j < x.size(); j++) 
-        {
-            temp = temp | x[j] << (7 - count);
+        code_list = list<bool>(symbol_codewords[c].begin(), symbol_codewords[c].end());
+
+        for (bool bit : code_list) {
+            temp = temp | bit << (7 - count);
             count++;
-            if (count == 8)
-            {
+            if (count == 8) {
                 count = 0;
                 g << temp;
                 temp = 0;
@@ -204,43 +206,47 @@ double Huffman::encode(ifstream& f, ofstream& g)
     double sizeG = g.tellp();
     f.close();
     g.close();
-    return sizeG / sizeF;
+
+    double coef = sizeG / sizeF;
+    cout << "Compression ratio: " << coef << endl;
 }
 
 bool Huffman::decode(ifstream& fg, ofstream& gf)
 {
-    if (fg.is_open()) 
+    buildTreeDec(fg);
+
+    if (root_node == nullptr) 
     {
-        buildTreeDec(fg);
-    }
-    else
+        std::cout << "Error building decoding tree!" << std::endl;
         return false;
+    }
 
     BuildCode(root_node);
 
     char byte;
-    int count = 0;
-    HuffmanNode* newNode = root_node;
-    byte = fg.get();
-    while (!fg.eof()) 
+    HuffmanNode* currentNode = root_node;
+
+    while (fg.get(byte)) 
     {
-        bool bit = byte & (1 << (7 - count));
-        if (bit)
-            newNode = newNode->right;
-        else
-            newNode = newNode->left;
-        if (newNode->right == NULL && newNode->left == NULL) 
+        for (int i = 7; i >= 0; --i) 
         {
-            gf << newNode->symbol;
-            newNode = root_node;
-        }
-        count++;
-        if (count == 8) 
-        {
-            count = 0;
-            byte = fg.get();
+            bool bit = (byte >> i) & 1;
+            currentNode = (bit) ? currentNode->right : currentNode->left;
+
+            if (currentNode == nullptr) 
+            {
+                std::cout << "Error decoding - Null node encountered!" << std::endl;
+                return false;
+            }
+
+            if (currentNode->right == nullptr && currentNode->left == nullptr) 
+            {
+                gf << currentNode->symbol;
+                currentNode = root_node;
+            }
         }
     }
+
     return true;
 }
 
@@ -272,8 +278,7 @@ int main()
     ofstream g("temp.txt", ios::out | ios::binary);
 
     Huffman haf;
-    double coef = haf.encode(f, g);
-    cout <<"Compression ratio: " << coef << endl;
+    haf.encode(f, g);
 
     f.close();
     g.close();
